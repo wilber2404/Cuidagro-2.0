@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>CUIDRAGRO - Monitoreo IoT del cultivo de café</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --verde-cafe: #3f6212;
+    --verde-claro: #84cc16;
+    --marron: #6b4226;
+    --fondo: #f5f5f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--fondo);
+    margin: 0;
+    color: #2b2b2b;
+  }
+  header {
+    background: linear-gradient(135deg, var(--verde-cafe), var(--marron));
+    color: white;
+    padding: 24px 32px;
+  }
+  header h1 { margin: 0; font-size: 1.6rem; }
+  header p { margin: 4px 0 0; opacity: 0.85; font-size: 0.9rem; }
+  main {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+  .tarjetas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .tarjeta {
+    background: white;
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border-left: 5px solid var(--verde-claro);
+  }
+  .tarjeta h3 { margin: 0 0 6px; font-size: 0.85rem; color: #666; text-transform: uppercase; }
+  .tarjeta .valor { font-size: 2rem; font-weight: 700; color: var(--verde-cafe); }
+  .grafico-caja {
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .estado { font-size: 0.85rem; color: #888; text-align: right; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌱 CUIDRAGRO</h1>
+  <p>Monitoreo en tiempo real de variables ambientales — Finca Villa Dolly, Manizales, Caldas</p>
+</header>
+
+<main>
+  <p class="estado" id="estado">Conectando con el servidor...</p>
+
+  <div class="tarjetas">
+    <div class="tarjeta"><h3>Temperatura</h3><div class="valor" id="valorTemp">--°C</div></div>
+    <div class="tarjeta"><h3>Humedad del aire</h3><div class="valor" id="valorHumAire">--%</div></div>
+    <div class="tarjeta"><h3>Humedad del suelo</h3><div class="valor" id="valorHumSuelo">--%</div></div>
+    <div class="tarjeta"><h3>pH del suelo</h3><div class="valor" id="valorPH">--</div></div>
+  </div>
+
+  <div class="grafico-caja">
+    <canvas id="graficoHistorico" height="90"></canvas>
+  </div>
+</main>
+
+<script>
+  const API_URL = 'http://localhost:3000/api';
+
+  const ctx = document.getElementById('graficoHistorico');
+  const grafico = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Temperatura (°C)', data: [], borderColor: '#e07a5f', tension: 0.3 },
+        { label: 'Humedad aire (%)', data: [], borderColor: '#3d5a80', tension: 0.3 },
+        { label: 'Humedad suelo (%)', data: [], borderColor: '#6b4226', tension: 0.3 },
+        { label: 'pH', data: [], borderColor: '#84cc16', tension: 0.3 }
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+
+  async function actualizarDatos() {
+    try {
+      const actual = await fetch(`${API_URL}/lecturas/actual`).then(r => r.json());
+      if (actual) {
+        document.getElementById('valorTemp').textContent = `${actual.temperatura}°C`;
+        document.getElementById('valorHumAire').textContent = `${actual.humedad_aire}%`;
+        document.getElementById('valorHumSuelo').textContent = `${actual.humedad_suelo}%`;
+        document.getElementById('valorPH').textContent = actual.ph;
+        document.getElementById('estado').textContent =
+          `Última actualización: ${new Date(actual.fecha_registro).toLocaleString('es-CO')}`;
+      }
+
+      const historico = await fetch(`${API_URL}/lecturas?limite=20`).then(r => r.json());
+      const ordenado = [...historico].reverse();
+      grafico.data.labels = ordenado.map(l => new Date(l.fecha_registro).toLocaleTimeString('es-CO'));
+      grafico.data.datasets[0].data = ordenado.map(l => l.temperatura);
+      grafico.data.datasets[1].data = ordenado.map(l => l.humedad_aire);
+      grafico.data.datasets[2].data = ordenado.map(l => l.humedad_suelo);
+      grafico.data.datasets[3].data = ordenado.map(l => l.ph);
+      grafico.update();
+    } catch (error) {
+      document.getElementById('estado').textContent = 'No fue posible conectar con el servidor.';
+      console.error(error);
+    }
+  }
+
+  actualizarDatos();
+  setInterval(actualizarDatos, 30000); // refresca cada 30 segundos
+</script>
+
+</body>
+</html>
